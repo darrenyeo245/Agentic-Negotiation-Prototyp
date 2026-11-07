@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic Negotiation</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1c2430; --muted: #5d6878; --line: #dfe3ea;
+    --buyer: #2563eb; --buyer-soft: #e5edff; --seller: #c2410c; --seller-soft: #fdeee6;
+    --zopa: rgba(22, 163, 74, .14); --ok: #15803d; --ok-soft: #e3f5e9; --bad: #b91c1c; --bad-soft: #fde8e8;
+    --accent: #1c2430; --accent-text: #ffffff; --focus: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12161c; --panel: #1b2129; --text: #e6e9ee; --muted: #9aa4b2; --line: #2e3742;
+      --buyer: #6b9cff; --buyer-soft: #1d2a45; --seller: #f08a4b; --seller-soft: #3a2519;
+      --zopa: rgba(74, 222, 128, .13); --ok: #4ade80; --ok-soft: #173223; --bad: #f87171; --bad-soft: #3a1d1d;
+      --accent: #e6e9ee; --accent-text: #12161c; --focus: #6b9cff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+           padding: 18px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 19px; margin: 0; letter-spacing: -.01em; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; }
+  .pill { margin-left: auto; font-size: 13px; padding: 4px 10px; border-radius: 99px;
+          border: 1px solid var(--line); color: var(--muted); }
+  .pill.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+  main { display: grid; grid-template-columns: minmax(340px, 420px) 1fr; gap: 20px;
+         padding: 20px 24px 40px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; padding: 16px; } }
+  .col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .step { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+          background: var(--accent); color: var(--accent-text); font-size: 12px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  textarea, input, select { width: 100%; font: inherit; color: var(--text); background: var(--bg);
+          border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  textarea { resize: vertical; }
+  textarea:focus, input:focus, select:focus, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  fieldset { border: 1px solid var(--line); border-radius: 10px; margin: 14px 0 0; padding: 4px 12px 12px; }
+  legend { font-size: 13px; font-weight: 600; padding: 0 6px; }
+  fieldset.buyer legend { color: var(--buyer); }
+  fieldset.seller legend { color: var(--seller); }
+  .euro { position: relative; }
+  .euro input { padding-right: 28px; }
+  .euro::after { content: "€"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+                 color: var(--muted); pointer-events: none; }
+  button { font: inherit; border-radius: 8px; padding: 8px 14px; cursor: pointer;
+           border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .spacer { flex: 1; }
+  .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+  .errors { margin: 10px 0 0; padding: 8px 12px 8px 28px; border-radius: 8px; background: var(--bad-soft);
+            color: var(--bad); font-size: 13px; }
+  .assumptions { margin: 10px 0 0; padding: 10px 12px 10px 28px; border-radius: 8px; font-size: 13px;
+                 background: var(--buyer-soft); }
+  .assumptions:empty, .errors:empty { display: none; }
+  .assumptions::before { content: "Annahmen von Claude, bitte prüfen:"; display: block; margin-left: -16px;
+                         font-weight: 600; }
+  svg text { fill: var(--muted); font-size: 12px; font-family: inherit; }
+  #rangeBar { width: 100%; height: 86px; margin-top: 14px; display: block; }
+  .chart-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .chart-head h2 { margin: 0; }
+  #runState { font-size: 13px; color: var(--muted); }
+  #chart { width: 100%; height: auto; display: block; margin-top: 12px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .legend span::before { content: ""; display: inline-block; width: 14px; height: 0; vertical-align: middle;
+                         margin-right: 6px; border-top: 2px solid currentColor; }
+  .legend .b { color: var(--buyer); } .legend .s { color: var(--seller); }
+  .legend .dash::before { border-top-style: dashed; } .legend .dot::before { border-top-style: dotted; }
+  .legend .z::before { height: 10px; border: 0; background: var(--zopa); }
+  .legend .r::before { border: 0; content: "×"; color: var(--bad); width: auto; font-weight: 700; }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 24px 8px; }
+  #timeline { display: flex; flex-direction: column; gap: 10px; }
+  .bubble { max-width: 82%; padding: 10px 14px; border-radius: 12px; border: 1px solid transparent; }
+  .bubble.buyer { align-self: flex-start; background: var(--buyer-soft); border-bottom-left-radius: 4px; }
+  .bubble.seller { align-self: flex-end; background: var(--seller-soft); border-bottom-right-radius: 4px; }
+  .bubble .meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+  .bubble .who { font-weight: 600; }
+  .bubble.buyer .who { color: var(--buyer); } .bubble.seller .who { color: var(--seller); }
+  .bubble .price { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .bubble .msg { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bubble .why { margin: 8px 0 0; padding-top: 6px; border-top: 1px dashed var(--line); font-size: 13px;
+                 color: var(--muted); display: none; overflow-wrap: anywhere; }
+  .show-why .bubble .why { display: block; }
+  .bubble.accept { border-color: var(--ok); } .bubble.withdraw { border-color: var(--muted); }
+  .badge { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 4px;
+           background: var(--panel); }
+  .rejected { align-self: center; font-size: 12px; color: var(--bad); background: var(--bad-soft);
+              padding: 6px 10px; border-radius: 8px; max-width: 90%; overflow-wrap: anywhere; }
+  .thinking { font-size: 13px; color: var(--muted); font-style: italic; }
+  .thinking.buyer { align-self: flex-start; } .thinking.seller { align-self: flex-end; }
+  .thinking::after { content: "…"; animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  #result { border-radius: 12px; padding: 16px 18px; display: none; }
+  #result.agreement { display: block; background: var(--ok-soft); border: 1px solid var(--ok); }
+  #result.aborted { display: block; background: var(--bad-soft); border: 1px solid var(--bad); }
+  #result strong { font-size: 18px; display: block; }
+  #result .path { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; margin-top: 6px; }
+  .toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted);
+            margin: 0 0 0 auto; cursor: pointer; }
+  .toggle input { width: auto; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Agentic Negotiation</h1>
+    <p>Zwei Agenten verhandeln einen Preis. Regeln und Preisgrenzen werden lokal geprüft.</p>
+  </div>
+  <span id="llmPill" class="pill">Status wird geladen…</span>
+</header>
+
+<main>
+  <div class="col">
+    <section class="card">
+      <h2><span class="step">1</span>Beschreiben</h2>
+      <textarea id="describe" rows="5" maxlength="4000"
+        placeholder="Beispiel: Ich verkaufe mein gebrauchtes Trekkingrad (28 Zoll, frisch gewartet), nur Abholung in Berlin. Ich hätte gern 480 €, unter 380 € gebe ich es nicht her. Der Käufer hofft auf 300 € und zahlt höchstens 420 €."></textarea>
+      <div class="row">
+        <button id="parseBtn" class="primary">Szenario erkennen</button>
+        <span id="parseNote" class="note"></span>
+      </div>
+      <ul id="assumptions" class="assumptions"></ul>
+    </section>
+
+    <section class="card">
+      <h2><span class="step">2</span>Prüfen und anpassen</h2>
+      <label for="example">Beispiel laden</label>
+      <select id="example"><option value="">Beispiel wählen…</option></select>
+
+      <label for="product">Produkt und Bedingungen</label>
+      <textarea id="product" rows="3" maxlength="500"></textarea>
+
+      <fieldset class="buyer">
+        <legend>Käufer</legend>
+        <div class="grid2">
+          <div><label for="buyerTarget">Wunschpreis</label>
+            <div class="euro"><input id="buyerTarget" inputmode="decimal" autocomplete="off"></div></div>
+          <div><label for="buyerLimit">Höchstpreis (Grenze)</label>
+            <div class="euro"><input id="buyerLimit" inputmode="decimal" autocomplete="off"></div></div>
+        </div>
+        <label for="buyerMode">Strategie</label>
+        <select id="buyerMode"><option value="claude">Claude</option><option value="demo">Demo (linear, kein LLM)</option></select>
+      </fieldset>
+
+      <fieldset class="seller">
+        <legend>Verkäufer</legend>
+        <div class="grid2">
+          <div><label for="sellerTarget">Wunschpreis</label>
+            <div class="euro"><input id="sellerTarget" inputmode="decimal" autocomplete="off"></div></div>
+          <div><label for="sellerLimit">Mindestpreis (Grenze)</label>
+            <div class="euro"><input id="sellerLimit" inputmode="decimal" autocomplete="off"></div></div>
+        </div>
+        <label for="sellerMode">Strategie</label>
+        <select id="sellerMode"><option value="claude">Claude</option><option value="demo">Demo (linear, kein LLM)</option></select>
+      </fieldset>
+
+      <div class="grid2">
+        <div><label for="maxTurns">Max. Züge insgesamt</label><input id="maxTurns" inputmode="numeric" value="12"></div>
+        <div><label for="maxAttempts">Versuche pro Zug</label>
+          <select id="maxAttempts"><option>1</option><option selected>2</option><option>3</option></select></div>
+      </div>
+
+      <svg id="rangeBar" viewBox="0 0 400 86" preserveAspectRatio="none" aria-label="Preisbereiche"></svg>
+      <p id="rangeNote" class="note"></p>
+      <ul id="formErrors" class="errors"></ul>
+
+      <div class="row">
+        <button id="startBtn" class="primary">Verhandlung starten</button>
+        <span class="spacer"></span>
+        <button id="downloadBtn" title="Als Szenario-Datei für config/ speichern">JSON speichern</button>
+      </div>
+      <p id="costNote" class="note"></p>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card">
+      <div class="chart-head">
+        <h2>Preisverlauf</h2>
+        <span id="runState"></span>
+        <span class="spacer" style="flex:1"></span>
+        <button id="cancelBtn" disabled>Abbrechen</button>
+      </div>
+      <svg id="chart" viewBox="0 0 720 340" role="img" aria-label="Preisverlauf der Angebote"></svg>
+      <div class="legend">
+        <span class="b">Käufer-Angebote</span><span class="s">Verkäufer-Angebote</span>
+        <span class="b dash">Höchstpreis</span><span class="b dot">Wunsch Käufer</span>
+        <span class="s dash">Mindestpreis</span><span class="s dot">Wunsch Verkäufer</span>
+        <span class="z">Einigungsbereich</span><span class="r">abgelehnter Vorschlag</span>
+      </div>
+    </section>
+
+    <div id="result"></div>
+
+    <section class="card">
+      <div class="chart-head">
+        <h2>Verlauf</h2>
+        <label class="toggle"><input type="checkbox" id="whyToggle"> Private Begründungen zeigen</label>
+      </div>
+      <div id="timeline"><p class="empty">Noch keine Verhandlung gestartet.</p></div>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const SVG = "http://www.w3.org/2000/svg";
+const ROLE = { buyer: "Käufer", seller: "Verkäufer" };
+const ACTION = { offer: "Angebot", accept: "Annahme", withdraw: "Abbruch" };
+const REASON = {
+  accepted_offer: "Angebot angenommen", max_turns: "Maximale Zugzahl erreicht",
+  agent_withdrew: "Ein Agent hat die Verhandlung beendet",
+  invalid_decision_limit: "Zu viele regelwidrige Vorschläge",
+  settlement_rule_violation: "Abschluss verletzt eine Preisgrenze", interrupted: "Unterbrochen",
+  "strategy_error:cancelled": "Von dir abgebrochen",
+};
+let status = { llm_available: false, examples: {} };
+let run = null;
+
+// ---------- Formatierung ----------
+function money(cents) {
+  if (cents == null) return "–";
+  return (cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+}
+function euroInput(cents) { return Number.isInteger(cents) ? (cents / 100).toFixed(2).replace(".", ",") : ""; }
+function parseEuro(text) {
+  let s = String(text).trim().replace(/[\s€]/g, "");
+  if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(s)) s = s.replace(/\./g, "");
+  s = s.replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+  return Math.round(parseFloat(s) * 100);
+}
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text != null) node.textContent = text;   // nie innerHTML: Modelltexte sind unvertrauenswürdig
+  return node;
+}
+function svgEl(tag, attrs, text) {
+  const node = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
+  if (text != null) node.textContent = text;
+  return node;
+}
+async function post(url, body) {
+  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify(body) });
+  const data = await response.json().catch(() => ({ error: "Ungültige Serverantwort." }));
+  if (!response.ok) throw new Error(data.error || response.statusText);
+  return data;
+}
+function listInto(node, items) {
+  node.replaceChildren(...items.map((item) => el("li", null, item)));
+}
+
+// ---------- Formular ----------
+function fillForm(s) {
+  $("product").value = s.product ?? "";
+  $("buyerTarget").value = euroInput(s.buyer?.target_cents);
+  $("buyerLimit").value = euroInput(s.buyer?.limit_cents);
+  $("sellerTarget").value = euroInput(s.seller?.target_cents);
+  $("sellerLimit").value = euroInput(s.seller?.limit_cents);
+  $("maxTurns").value = s.max_turns ?? 12;
+  $("maxAttempts").value = String(s.max_attempts_per_turn ?? 2);
+  updatePreview();
+}
+function readForm() {
+  const errors = [];
+  const price = (id, label) => {
+    const cents = parseEuro($(id).value);
+    if (cents == null || cents <= 0) errors.push(`${label}: bitte einen Betrag wie 112,50 eingeben.`);
+    return cents;
+  };
+  const product = $("product").value.trim();
+  if (!product) errors.push("Bitte ein Produkt beschreiben.");
+  const bt = price("buyerTarget", "Wunschpreis Käufer"), bl = price("buyerLimit", "Höchstpreis Käufer");
+  const st = price("sellerTarget", "Wunschpreis Verkäufer"), sl = price("sellerLimit", "Mindestpreis Verkäufer");
+  const turns = Number($("maxTurns").value);
+  if (!Number.isInteger(turns) || turns < 2 || turns > 100) errors.push("Max. Züge: ganze Zahl von 2 bis 100.");
+  if (bt != null && bl != null && bt > bl) errors.push("Käufer: Der Wunschpreis darf nicht über dem Höchstpreis liegen.");
+  if (st != null && sl != null && st < sl) errors.push("Verkäufer: Der Wunschpreis darf nicht unter dem Mindestpreis liegen.");
+  const scenario = {
+    product, currency: "EUR",
+    buyer: { name: "Kaeufer", target_cents: bt, limit_cents: bl },
+    seller: { name: "Verkaeufer", target_cents: st, limit_cents: sl },
+    max_turns: turns, max_attempts_per_turn: Number($("maxAttempts").value),
+  };
+  return { scenario, errors };
+}
+function updatePreview() {
+  const { scenario: s } = readForm();
+  const svg = $("rangeBar");
+  svg.replaceChildren();
+  const vals = [s.buyer.target_cents, s.buyer.limit_cents, s.seller.target_cents, s.seller.limit_cents];
+  if (vals.some((v) => !Number.isInteger(v))) { $("rangeNote").textContent = ""; return; }
+  const lo = Math.min(...vals), hi = Math.max(...vals), pad = Math.max((hi - lo) * 0.08, 100);
+  const x = (v) => 8 + ((v - (lo - pad)) / (hi - lo + 2 * pad)) * 384;
+  const overlap = s.buyer.limit_cents >= s.seller.limit_cents;
+  if (overlap) svg.append(svgEl("rect", { x: x(s.seller.limit_cents), y: 4, height: 60,
+    width: Math.max(2, x(s.buyer.limit_cents) - x(s.seller.limit_cents)), fill: "var(--zopa)" }));
+  const bar = (a, b, y, color) => svg.append(svgEl("rect", { x: Math.min(x(a), x(b)), y, height: 14, rx: 4,
+    width: Math.max(4, Math.abs(x(b) - x(a))), fill: color, opacity: .85 }));
+  bar(s.buyer.target_cents, s.buyer.limit_cents, 12, "var(--buyer)");
+  bar(s.seller.limit_cents, s.seller.target_cents, 40, "var(--seller)");
+  svg.append(svgEl("text", { x: 8, y: 82 }, money(lo)));
+  svg.append(svgEl("text", { x: 392, y: 82, "text-anchor": "end" }, money(hi)));
+  $("rangeNote").textContent = overlap
+    ? `Einigungsbereich: ${money(s.seller.limit_cents)} bis ${money(s.buyer.limit_cents)}. Blau: Käufer (Wunsch bis Grenze), Orange: Verkäufer.`
+    : "Kein Einigungsbereich: Der Höchstpreis des Käufers liegt unter dem Mindestpreis des Verkäufers. Ein Abbruch ist zu erwarten.";
+}
+function updateCostNote() {
+  const llm = [$("buyerMode").value, $("sellerMode").value].filter((m) => m === "claude").length;
+  const turns = Number($("maxTurns").value) || 0, attempts = Number($("maxAttempts").value) || 0;
+  $("costNote").textContent = llm
+    ? `Claude (${status.model}) entscheidet für ${llm === 2 ? "beide Seiten" : "eine Seite"}: höchstens ${Math.ceil(turns * attempts * llm / 2)} API-Aufrufe. Es können Kosten entstehen.`
+    : "Beide Seiten nutzen die Demo-Strategie: keine API-Aufrufe.";
+}
+
+// ---------- Sprachauswertung ----------
+$("parseBtn").addEventListener("click", async () => {
+  const text = $("describe").value.trim();
+  if (!text) { $("parseNote").textContent = "Bitte zuerst eine Beschreibung eingeben."; return; }
+  $("parseBtn").disabled = true;
+  $("parseNote").textContent = "Claude liest die Beschreibung…";
+  listInto($("assumptions"), []);
+  try {
+    const draft = await post("/api/parse", { text });
+    fillForm(draft.scenario);
+    listInto($("assumptions"), draft.assumptions || []);
+    listInto($("formErrors"), draft.errors || []);
+    $("parseNote").textContent = "Übernommen. Bitte die Werte prüfen, bevor du startest.";
+  } catch (error) {
+    $("parseNote").textContent = error.message;
+  } finally {
+    $("parseBtn").disabled = !status.llm_available;
+  }
+});
+
+// ---------- Lauf ----------
+$("startBtn").addEventListener("click", async () => {
+  const { scenario, errors } = readForm();
+  listInto($("formErrors"), errors);
+  if (errors.length) return;
+  try {
+    const { run_id } = await post("/api/runs", { scenario, buyer: $("buyerMode").value, seller: $("sellerMode").value });
+    beginRun(run_id);
+  } catch (error) {
+    listInto($("formErrors"), [error.message]);
+  }
+});
+$("cancelBtn").addEventListener("click", async () => {
+  if (!run) return;
+  $("cancelBtn").disabled = true;
+  $("runState").textContent = "Wird nach dem aktuellen Zug beendet…";
+  try { await post(`/api/runs/${run.id}/cancel`, {}); } catch (error) { $("runState").textContent = error.message; }
+});
+$("downloadBtn").addEventListener("click", () => {
+  const { scenario, errors } = readForm();
+  listInto($("formErrors"), errors);
+  if (errors.length) return;
+  const blob = new Blob([JSON.stringify(scenario, null, 2) + "\n"], { type: "application/json" });
+  const link = el("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "szenario.json";
+  link.click();
+  URL.revokeObjectURL(link.href);
+});
+$("whyToggle").addEventListener("change", (e) => $("timeline").classList.toggle("show-why", e.target.checked));
+
+function beginRun(id) {
+  run = { id, scenario: null, committed: [], rejected: [], proposals: {}, thinking: null, source: null };
+  $("timeline").replaceChildren();
+  $("result").className = ""; $("result").replaceChildren();
+  $("startBtn").disabled = true; $("cancelBtn").disabled = false;
+  $("runState").textContent = "Läuft…";
+  const source = new EventSource(`/api/runs/${id}/events`);
+  run.source = source;
+  source.onmessage = (message) => handleEvent(JSON.parse(message.data));
+  renderChart();
+}
+function endRun() {
+  if (run?.source) run.source.close();
+  $("startBtn").disabled = false; $("cancelBtn").disabled = true;
+  clearThinking();
+}
+function clearThinking() { if (run?.thinking) { run.thinking.remove(); run.thinking = null; } }
+
+function handleEvent(e) {
+  const line = $("timeline");
+  switch (e.event) {
+    case "started":
+      run.scenario = e.scenario; renderChart(); break;
+    case "decision_requested": {
+      clearThinking();
+      const note = el("div", `thinking ${e.actor}`,
+        `${ROLE[e.actor]} überlegt${e.attempt > 1 ? ` (Versuch ${e.attempt})` : ""}`);
+      run.thinking = note; line.append(note); note.scrollIntoView({ block: "nearest" });
+      break;
+    }
+    case "proposed":
+      run.proposals[`${e.turn}-${e.attempt}`] = { raw: e.raw, model: e.model }; break;
+    case "rule_checked":
+      if (!e.valid) {
+        const proposal = run.proposals[`${e.turn}-${e.attempt}`] || {};
+        const price = proposal.raw && typeof proposal.raw === "object" ? proposal.raw.price_cents : null;
+        if (Number.isInteger(price)) run.rejected.push({ turn: e.turn, actor: e.actor, price });
+        clearThinking();
+        line.append(el("div", "rejected",
+          `Zug ${e.turn} · ${ROLE[e.actor]}: Vorschlag ${Number.isInteger(price) ? `über ${money(price)} ` : ""}abgelehnt. ` +
+          (e.violations || []).join(" ")));
+        renderChart();
+      }
+      break;
+    case "committed": {
+      clearThinking();
+      const d = e.decision;
+      run.committed.push({ turn: e.turn, actor: e.actor, action: d.action, price: d.price_cents });
+      const model = Object.entries(run.proposals).filter(([k]) => k.startsWith(`${e.turn}-`)).pop()?.[1]?.model;
+      const bubble = el("div", `bubble ${e.actor} ${d.action}`);
+      const meta = el("div", "meta");
+      meta.append(el("span", null, `Zug ${e.turn}`), el("span", "who", ROLE[e.actor]),
+                  el("span", "badge", ACTION[d.action] || d.action));
+      if (d.price_cents != null) meta.append(el("span", "price", money(d.price_cents)));
+      if (model) meta.append(el("span", null, model));
+      bubble.append(meta, el("p", "msg", d.message), el("p", "why", "Private Begründung: " + d.rationale));
+      line.append(bubble); bubble.scrollIntoView({ block: "nearest" });
+      renderChart();
+      break;
+    }
+    case "strategy_error":
+      clearThinking();
+      if (e.code !== "cancelled") line.append(el("div", "rejected", `Technischer Fehler bei ${ROLE[e.actor]}: ${e.code}`));
+      break;
+    case "server_error":
+      clearThinking();
+      line.append(el("div", "rejected", `Serverfehler (${e.error_type}).`)); endRun(); break;
+    case "finished":
+      showResult(e.result, e.log_dir); endRun(); break;
+  }
+}
+function showResult(r, logDir) {
+  const box = $("result");
+  box.className = r.status;
+  const reason = REASON[r.reason] || (r.reason.startsWith("strategy_error:") ? `Technischer Abbruch (${r.reason.slice(15)})` : r.reason);
+  box.replaceChildren(
+    el("strong", null, r.status === "agreement" ? `Einigung bei ${money(r.price_cents)}` : "Keine Einigung"),
+    el("div", null, `${reason} · ${r.turns} Züge · ${r.attempts} Versuche`),
+    el("div", "path", `Protokoll: ${logDir}`));
+  $("runState").textContent = "Beendet";
+  renderChart(r);
+}
+
+// ---------- Diagramm ----------
+function renderChart(result) {
+  const svg = $("chart");
+  svg.replaceChildren();
+  const W = 720, H = 340, L = 74, R = 132, T = 16, B = 34;
+  const s = run?.scenario;
+  if (!s) {
+    svg.append(svgEl("text", { x: W / 2, y: H / 2, "text-anchor": "middle" }, "Starte eine Verhandlung, um den Preisverlauf zu sehen."));
+    return;
+  }
+  const lines = [
+    { v: s.buyer.limit_cents, c: "var(--buyer)", d: "6 4", t: "Höchstpreis" },
+    { v: s.buyer.target_cents, c: "var(--buyer)", d: "2 4", t: "Wunsch Käufer" },
+    { v: s.seller.limit_cents, c: "var(--seller)", d: "6 4", t: "Mindestpreis" },
+    { v: s.seller.target_cents, c: "var(--seller)", d: "2 4", t: "Wunsch Verkäufer" },
+  ];
+  const all = [...lines.map((l) => l.v), ...run.committed.map((c) => c.price).filter((p) => p != null),
+               ...run.rejected.map((r) => r.price)];
+  const lo = Math.min(...all), hi = Math.max(...all), pad = Math.max((hi - lo) * 0.1, 100);
+  const y0 = lo - pad, y1 = hi + pad;
+  const y = (v) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  const n = s.max_turns;
+  const x = (turn) => L + ((turn - 1) / Math.max(1, n - 1)) * (W - L - R);
+
+  // Raster und Achsen
+  const ticks = 5;
+  for (let i = 0; i <= ticks; i++) {
+    const v = y0 + (i / ticks) * (y1 - y0);
+    svg.append(svgEl("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--line)" }));
+    svg.append(svgEl("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end" }, money(Math.round(v))));
+  }
+  const step = n > 24 ? Math.ceil(n / 12) : 1;
+  for (let t = 1; t <= n; t += step) svg.append(svgEl("text", { x: x(t), y: H - 12, "text-anchor": "middle" }, String(t)));
+  svg.append(svgEl("text", { x: (L + W - R) / 2, y: H, "text-anchor": "middle" }, "Zug"));
+
+  // Einigungsbereich
+  if (s.buyer.limit_cents >= s.seller.limit_cents) {
+    svg.append(svgEl("rect", { x: L, width: W - L - R, y: y(s.buyer.limit_cents),
+      height: Math.max(1, y(s.seller.limit_cents) - y(s.buyer.limit_cents)), fill: "var(--zopa)" }));
+  }
+  // Ziel- und Grenzlinien mit überlappungsfreien Beschriftungen
+  const labels = lines.map((l) => ({ ...l, ly: y(l.v) })).sort((a, b) => a.ly - b.ly);
+  for (let i = 1; i < labels.length; i++) labels[i].ly = Math.max(labels[i].ly, labels[i - 1].ly + 14);
+  for (const l of labels) {
+    svg.append(svgEl("line", { x1: L, x2: W - R, y1: y(l.v), y2: y(l.v), stroke: l.c, "stroke-dasharray": l.d, "stroke-width": 1.5 }));
+    svg.append(svgEl("text", { x: W - R + 8, y: l.ly + 4, style: `fill:${l.c}` }, `${l.t} ${money(l.v)}`));
+  }
+  // Angebote je Seite
+  for (const role of ["buyer", "seller"]) {
+    const color = role === "buyer" ? "var(--buyer)" : "var(--seller)";
+    const pts = run.committed.filter((c) => c.actor === role && c.action === "offer");
+    if (pts.length > 1) svg.append(svgEl("polyline", { points: pts.map((p) => `${x(p.turn)},${y(p.price)}`).join(" "),
+      fill: "none", stroke: color, "stroke-width": 2.5, "stroke-linejoin": "round" }));
+    for (const p of pts) {
+      const dot = svgEl("circle", { cx: x(p.turn), cy: y(p.price), r: 5, fill: color, stroke: "var(--panel)", "stroke-width": 2 });
+      dot.append(svgEl("title", {}, `Zug ${p.turn}, ${ROLE[role]}: ${money(p.price)}`));
+      svg.append(dot);
+    }
+  }
+  for (const r of run.rejected) {
+    const mark = svgEl("text", { x: x(r.turn), y: y(r.price) + 5, "text-anchor": "middle",
+      style: "fill:var(--bad);font-size:16px;font-weight:700" }, "×");
+    mark.append(svgEl("title", {}, `Abgelehnt: ${ROLE[r.actor]} wollte ${money(r.price)} (Zug ${r.turn})`));
+    svg.append(mark);
+  }
+  const accept = run.committed.find((c) => c.action === "accept");
+  if (accept) {
+    svg.append(svgEl("circle", { cx: x(accept.turn), cy: y(accept.price), r: 11, fill: "none", stroke: "var(--ok)", "stroke-width": 3 }));
+    svg.append(svgEl("text", { x: x(accept.turn), y: y(accept.price) - 16, "text-anchor": "middle",
+      style: "fill:var(--ok);font-weight:700" }, `Einigung ${money(accept.price)}`));
+  }
+}
+
+// ---------- Start ----------
+async function init() {
+  try {
+    status = await (await fetch("/api/status")).json();
+  } catch {
+    $("llmPill").textContent = "Server nicht erreichbar";
+    return;
+  }
+  const pill = $("llmPill");
+  pill.textContent = status.llm_available ? `Claude verfügbar · ${status.model}` : "Nur Demo-Modus";
+  pill.classList.toggle("ok", status.llm_available);
+  if (!status.llm_available) {
+    pill.title = status.hint || "";
+    $("parseBtn").disabled = true;
+    $("parseNote").textContent = status.hint || "";
+    for (const id of ["buyerMode", "sellerMode"]) {
+      $(id).value = "demo"; $(id).querySelector('option[value="claude"]').disabled = true;
+    }
+  }
+  const select = $("example");
+  for (const name of Object.keys(status.examples)) select.append(el("option", null, name));
+  select.addEventListener("change", () => { if (select.value) fillForm(status.examples[select.value]); });
+  if (status.examples.default) fillForm(status.examples.default);
+  for (const id of ["product", "buyerTarget", "buyerLimit", "sellerTarget", "sellerLimit", "maxTurns", "maxAttempts", "buyerMode", "sellerMode"]) {
+    $(id).addEventListener("input", () => { updatePreview(); updateCostNote(); });
+  }
+  updateCostNote();
+  renderChart();
+}
+init();
+</script>
+</body>
+</html>

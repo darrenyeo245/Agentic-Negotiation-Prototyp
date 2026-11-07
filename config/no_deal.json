@@ -1,0 +1,8 @@
+{
+  "product": "Gebrauchte mechanische Tastatur, funktionsfaehig, inklusive Versand",
+  "currency": "EUR",
+  "buyer": {"name": "Kaeufer", "target_cents": 6000, "limit_cents": 9000},
+  "seller": {"name": "Verkaeufer", "target_cents": 14000, "limit_cents": 11000},
+  "max_turns": 12,
+  "max_attempts_per_turn": 2
+}

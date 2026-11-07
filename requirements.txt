@@ -1,0 +1,3 @@
+# Python >= 3.10. Die Offline-Demo braucht keine Pakete;
+# nur --mode claude benoetigt das offizielle Anthropic SDK.
+anthropic>=2.6.0
